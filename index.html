@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>股票模拟盘 · 杠杆版</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; background: #0f1420; color: #e6e9ef; padding: 20px; }
+  h1 { font-size: 22px; margin-bottom: 16px; }
+  .top-bar { display: flex; flex-wrap: wrap; gap: 16px; background: #1a2233; padding: 16px 20px; border-radius: 10px; margin-bottom: 14px; align-items: center; }
+  .stat { min-width: 92px; }
+  .stat .label { font-size: 12px; color: #8b93a7; }
+  .stat .value { font-size: 18px; font-weight: 600; }
+  .clock { font-size: 26px; font-weight: 700; font-variant-numeric: tabular-nums; padding: 6px 14px; background: #0f1420; border-radius: 8px; }
+  .clock.closed { color: #ff9f43; } .clock.open { color: #33cc88; }
+  .controls { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .news-bar { display: flex; align-items: center; gap: 12px; background: #1a2233; border-left: 4px solid #4a7dff; padding: 10px 16px; border-radius: 8px; margin-bottom: 14px; min-height: 42px; overflow: hidden; }
+  .news-bar.good { border-left-color: #ff5c5c; } .news-bar.bad { border-left-color: #33cc88; }
+  .news-label { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 4px; background: #2a3446; white-space: nowrap; }
+  .news-bar.good .news-label { background: #ff5c5c; color: #fff; } .news-bar.bad .news-label { background: #33cc88; color: #fff; }
+  .news-text { font-size: 14px; color: #e6e9ef; white-space: nowrap; } .news-text.dim { color: #6b7488; }
+  .lev-bar { display: flex; align-items: center; gap: 10px; background: #1a2233; padding: 12px 20px; border-radius: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .lev-bar .label { font-size: 13px; color: #8b93a7; }
+  .lev-opt { padding: 6px 14px; border-radius: 6px; background: #2a3446; cursor: pointer; font-size: 13px; font-weight: 600; border: 1px solid transparent; }
+  .lev-opt.active { background: #4a7dff; color: #fff; } .lev-opt.high.active { background: #ff5c5c; }
+  .lev-warn { font-size: 12px; color: #ff9f43; margin-left: 8px; }
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .panel { background: #1a2233; border-radius: 10px; padding: 16px; }
+  .panel h2 { font-size: 16px; margin-bottom: 12px; color: #b8c0d4; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: right; padding: 8px 6px; }
+  th:first-child, td:first-child { text-align: left; }
+  th { color: #8b93a7; font-weight: 500; border-bottom: 1px solid #2a3446; }
+  tr.market-row td { border-bottom: 1px solid #232c3d; }
+  tr.market-row { cursor: pointer; } tr.market-row.selected { background: #232c3d; }
+  .up { color: #ff5c5c; } .down { color: #33cc88; } .flat { color: #b8c0d4; }
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 5px; border-radius: 4px; margin-left: 4px; vertical-align: middle; }
+  .tag-up { background: #ff5c5c; color: #fff; } .tag-down { background: #33cc88; color: #fff; } .tag-news { background: #ff9f43; color: #1a2233; }
+  input { width: 58px; padding: 5px 8px; background: #0f1420; border: 1px solid #2a3446; border-radius: 6px; color: #e6e9ef; text-align: right; }
+  button { padding: 6px 12px; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 500; transition: opacity .15s; }
+  button:hover { opacity: .85; } button:disabled { opacity: .4; cursor: not-allowed; }
+  .btn-buy { background: #ff5c5c; color: #fff; } .btn-sell { background: #33cc88; color: #fff; }
+  .btn-primary { background: #4a7dff; color: #fff; padding: 8px 16px; } .btn-ghost { background: #2a3446; color: #e6e9ef; }
+  select { padding: 7px 10px; background: #0f1420; border: 1px solid #2a3446; border-radius: 6px; color: #e6e9ef; }
+  .order-form .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .order-form .row label { width: 48px; font-size: 13px; color: #8b93a7; }
+  .order-form select, .order-form input { flex: 1; width: auto; }
+  .order-form input { text-align: right; }
+  .side-toggle { display: flex; gap: 8px; flex: 1; }
+  .side-opt { flex: 1; background: #2a3446; }
+  #sideBuy.active { background: #ff5c5c; color: #fff; } #sideSell.active { background: #33cc88; color: #fff; }
+  .order-hint { font-size: 12px; color: #8b93a7; margin: 4px 0; }
+  .fee-note { font-size: 11px; color: #6b7488; margin-top: 8px; line-height: 1.6; }
+  .chart-panel { margin-top: 20px; }
+  .chart-head { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; flex-wrap: wrap; }
+  .chart-price { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .chart-limits { font-size: 12px; color: #8b93a7; }
+  canvas { width: 100%; height: 300px; display: block; }
+  .log { max-height: 180px; overflow-y: auto; font-size: 13px; line-height: 1.7; color: #a9b2c7; }
+  .log div { border-bottom: 1px solid #232c3d; padding: 3px 0; }
+  .log div.danger { color: #ff5c5c; font-weight: 600; } .log div.good { color: #ff5c5c; } .log div.bad { color: #33cc88; }
+  .empty { color: #6b7488; font-size: 13px; padding: 8px 0; }
+  .risk-ok { color: #33cc88; } .risk-mid { color: #ff9f43; } .risk-bad { color: #ff5c5c; }
+  @media (max-width: 780px) { .layout { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+  <h1>📈 股票模拟盘 · 杠杆版</h1>
+
+  <div class="top-bar">
+    <div class="clock closed" id="clock">09:00</div>
+    <div class="stat"><div class="label">交易日</div><div class="value" id="day">1</div></div>
+    <div class="stat"><div class="label">可用现金</div><div class="value" id="cash">0</div></div>
+    <div class="stat"><div class="label">冻结资金</div><div class="value" id="frozenCash">0</div></div>
+    <div class="stat"><div class="label">持仓市值</div><div class="value" id="holdingValue">0</div></div>
+    <div class="stat"><div class="label">负债</div><div class="value" id="debt">0</div></div>
+    <div class="stat"><div class="label">净资产(权益)</div><div class="value" id="equity">0</div></div>
+    <div class="stat"><div class="label">总盈亏</div><div class="value" id="totalPnl">0</div></div>
+    <div class="stat"><div class="label">保证金率</div><div class="value" id="marginRatio">--</div></div>
+    <div class="controls">
+      <select id="speed">
+        <option value="700">慢速</option>
+        <option value="350" selected>中速</option>
+        <option value="120">快速</option>
+      </select>
+      <button class="btn-primary" id="playBtn">开盘 ▶</button>
+      <button class="btn-ghost" id="reset">重置</button>
+    </div>
+  </div>
+
+  <div class="news-bar" id="newsBar">
+    <span class="news-label">快讯</span>
+    <span class="news-text dim" id="newsText">开盘后关注突发消息，利好直接涨停、利空直接跌停</span>
+  </div>
+
+  <div class="lev-bar">
+    <span class="label">杠杆倍数：</span>
+    <span class="lev-opt active" data-lev="1">1x 无杠杆</span>
+    <span class="lev-opt" data-lev="2">2x</span>
+    <span class="lev-opt" data-lev="3">3x</span>
+    <span class="lev-opt high" data-lev="5">5x 高风险</span>
+    <span class="lev-warn" id="levWarn"></span>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>行情（点击选择 · 涨跌停 ±10% · 市价单）</h2>
+      <table>
+        <thead><tr><th>名称</th><th>现价</th><th>涨跌</th><th>数量</th><th>操作</th></tr></thead>
+        <tbody id="marketBody"></tbody>
+      </table>
+    </div>
+    <div class="panel">
+      <h2>我的持仓</h2>
+      <table>
+        <thead><tr><th>名称</th><th>持股</th><th>可卖</th><th>成本</th><th>现价</th><th>盈亏</th></tr></thead>
+        <tbody id="holdingBody"></tbody>
+      </table>
+      <p class="empty" id="holdingEmpty">暂无持仓，去买入吧</p>
+    </div>
+  </div>
+
+  <div class="layout" style="margin-top:20px;">
+    <div class="panel">
+      <h2>委托挂单（限价单）</h2>
+      <div class="order-form">
+        <div class="row"><label>股票</label><select id="orderStock"></select></div>
+        <div class="row"><label>方向</label>
+          <span class="side-toggle">
+            <button id="sideBuy" class="side-opt active">买入</button>
+            <button id="sideSell" class="side-opt">卖出</button>
+          </span>
+        </div>
+        <div class="row"><label>委托价</label><input type="number" id="orderPrice" step="0.01"></div>
+        <div class="row"><label>手数</label><input type="number" id="orderLots" value="1" min="1"></div>
+        <div class="order-hint" id="orderHint"></div>
+        <button class="btn-primary" id="placeOrder" style="width:100%;margin-top:8px;">提交委托</button>
+        <div class="fee-note">
+          手续费：佣金万2.5(最低5元)，卖出加收印花税千0.5<br>
+          T+1：当日买入次日才可卖 · 融资日息 0.03%（开盘扣）<br>
+          涨停不可买、跌停不可卖，未成交委托收盘清算
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>当前委托</h2>
+      <table>
+        <thead><tr><th>股票</th><th>方向</th><th>委托价</th><th>手数</th><th>操作</th></tr></thead>
+        <tbody id="ordersBody"></tbody>
+      </table>
+      <p class="empty" id="ordersEmpty">暂无委托</p>
+    </div>
+  </div>
+
+  <div class="panel chart-panel">
+    <div class="chart-head">
+      <h2 id="chartTitle" style="margin:0;">走势图</h2>
+      <span class="chart-price" id="chartPrice">--</span>
+      <span class="chart-limits" id="chartLimits"></span>
+    </div>
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="panel" style="margin-top:20px;">
+    <h2>交易记录</h2>
+    <div class="log" id="log"></div>
+  </div>
+
+<script>
+// ---------- 配置 ----------
+const INITIAL_CASH = 100000;
+const LOT = 100;
+const OPEN_MIN = 9 * 60;
+const CLOSE_MIN = 15 * 60;
+const STEP_MIN = 3;
+const LIMIT_PCT = 0.10;
+const MAINTENANCE_RATIO = 0.15;
+const EVENT_PROB = 0.05;
+const COMMISSION_RATE = 0.00025;   // 佣金 万2.5
+const COMMISSION_MIN = 5;          // 佣金最低5元
+const STAMP_TAX_RATE = 0.0005;     // 印花税 千0.5（仅卖出）
+const DAILY_INTEREST_RATE = 0.0003;// 融资日息 0.03%
+
+const STOCK_DEFS = [
+  { code: '600839', name: '四川长虹', price: 3.60,  vol: 0.012 },
+  { code: '002810', name: '山东赫达', price: 24.80, vol: 0.016 },
+  { code: '000020', name: '深华发A',  price: 10.50, vol: 0.022 },
+  { code: '601991', name: '大唐发电', price: 2.85,  vol: 0.010 },
+  { code: '000795', name: '英洛华',   price: 5.20,  vol: 0.015 },
+  { code: '000725', name: '京东方A',  price: 4.15,  vol: 0.013 },
+  { code: '002208', name: '合肥城建', price: 8.40,  vol: 0.018 },
+];
+
+const GOOD_NEWS = ['发布重大资产重组预案，市场热捧','中标数十亿元大单，业绩预期大增','季度净利润同比暴涨超300%','获国家级产业基金战略入股','核心新产品通过验证，即将量产','拟高送转并大额回购股份'];
+const BAD_NEWS = ['突发监管立案调查，风险骤增','控股股东大额减持套现','业绩暴雷，预计巨额亏损','核心高管集体离职，经营承压','重要合同遭取消，订单流失','涉嫌财务造假被交易所问询'];
+
+// ---------- 状态 ----------
+let state, timer = null, selectedCode = STOCK_DEFS[0].code, leverage = 1, orderSide = 'buy', orderSeq = 1;
+
+function initState() {
+  state = {
+    cash: INITIAL_CASH, frozenCash: 0, debt: 0, day: 1, minute: OPEN_MIN, running: false,
+    stocks: STOCK_DEFS.map(s => ({
+      ...s, prevClose: s.price, shares: 0, frozenToday: 0, costTotal: 0, history: [s.price],
+      newsDir: 0, newsHold: 0,
+    })),
+    orders: [], logs: [], news: null,
+  };
+}
+
+const round2 = n => Math.round(n * 100) / 100;
+const isOpen = () => state.minute < CLOSE_MIN;
+const upperLimit = s => round2(s.prevClose * (1 + LIMIT_PCT));
+const lowerLimit = s => round2(s.prevClose * (1 - LIMIT_PCT));
+const atUpper = s => s.price >= upperLimit(s) - 1e-9;
+const atLower = s => s.price <= lowerLimit(s) + 1e-9;
+
+const buyFee = amt => Math.max(amt * COMMISSION_RATE, COMMISSION_MIN);
+const sellFee = amt => Math.max(amt * COMMISSION_RATE, COMMISSION_MIN) + amt * STAMP_TAX_RATE;
+
+function reservedSell(code){ return state.orders.filter(o => o.side==='sell' && o.code===code).reduce((a,o)=>a+o.shares,0); }
+function sellableShares(s){ return s.shares - s.frozenToday - reservedSell(s.code); }
+
+function holdingValue(){ return state.stocks.reduce((sum,s)=>sum+s.shares*s.price,0); }
+function equity(){ return state.cash + state.frozenCash + holdingValue() - state.debt; }
+function marginRatio(){ const hv=holdingValue(); return hv<=0 ? Infinity : equity()/hv; }
+
+// ---------- 突发事件 ----------
+function maybeTriggerEvent() {
+  if (Math.random() > EVENT_PROB) return;
+  const s = state.stocks[Math.floor(Math.random()*state.stocks.length)];
+  if (s.newsHold > 0) return;
+  const good = Math.random() < 0.5, dir = good ? 1 : -1;
+  const text = good ? GOOD_NEWS[Math.floor(Math.random()*GOOD_NEWS.length)] : BAD_NEWS[Math.floor(Math.random()*BAD_NEWS.length)];
+  s.price = good ? upperLimit(s) : lowerLimit(s);
+  s.newsDir = dir;
+  s.newsHold = Math.floor(Math.random()*20) + 10;
+  state.news = { type: good?'good':'bad', text: `【${good?'利好':'利空'}】${s.name}：${text}，${good?'一字涨停':'一字跌停'}！` };
+  addLog(state.news.text, false, good?'good':'bad');
+}
+
+// ---------- 价格模拟 ----------
+function stepPrices() {
+  state.stocks.forEach(s => {
+    const hi = upperLimit(s), lo = lowerLimit(s);
+    let next;
+    if (s.newsHold > 0) {
+      s.newsHold--;
+      if (Math.random() < 0.8) next = s.newsDir > 0 ? hi : lo;
+      else next = s.price * (1 + (Math.random()-0.5)*2*s.vol);
+      if (s.newsHold === 0) s.newsDir = 0;
+    } else {
+      next = s.price * (1 + (Math.random()-0.5)*2*s.vol);
+    }
+    if (next > hi) next = hi;
+    if (next < lo) next = lo;
+    if (next < 0.5) next = 0.5;
+    s.price = round2(next);
+    s.history.push(s.price);
+  });
+}
+
+// ---------- 委托撮合 ----------
+function executeBuyOrder(o, s) {
+  const shares = o.lots*LOT, cost = shares*o.price, borrow = cost - o.margin;
+  state.frozenCash -= o.reserved;
+  state.debt += borrow;
+  s.shares += shares; s.frozenToday += shares; s.costTotal += cost;
+  addLog(`委托成交·买入 ${s.name} ${shares}股 @ ${fmt(o.price)}（手续费 ${fmt(o.fee)}）`);
+}
+function executeSellOrder(o, s) {
+  const shares = o.shares, income = shares*o.price, fee = sellFee(income), net = income - fee;
+  const avgCost = s.costTotal / s.shares;
+  s.costTotal -= avgCost*shares; s.shares -= shares;
+  const repay = Math.min(net, state.debt); state.debt -= repay; state.cash += net - repay;
+  addLog(`委托成交·卖出 ${s.name} ${shares}股 @ ${fmt(o.price)}（费税 ${fmt(fee)}${repay>0?`，还款 ${fmt(repay)}`:''}）`);
+}
+function processOrders() {
+  const filled = [];
+  state.orders.forEach(o => {
+    const s = state.stocks.find(x => x.code===o.code);
+    if (o.side==='buy') {
+      if (!atUpper(s) && s.price <= o.price + 1e-9) { executeBuyOrder(o,s); filled.push(o.id); }
+    } else {
+      if (!atLower(s) && s.price >= o.price - 1e-9) { executeSellOrder(o,s); filled.push(o.id); }
+    }
+  });
+  if (filled.length) state.orders = state.orders.filter(o => !filled.includes(o.id));
+}
+function cancelAllOrders(silent) {
+  const had = state.orders.length > 0;
+  state.orders.filter(o=>o.side==='buy').forEach(o => { state.cash += o.reserved; state.frozenCash -= o.reserved; });
+  state.orders = [];
+  if (state.frozenCash < 0.001) state.frozenCash = 0;
+  if (!silent && had) addLog('收盘清算未成交委托');
+}
+
+// ---------- 强制平仓 ----------
+function checkLiquidation() {
+  if (state.debt <= 0) return;
+  if (marginRatio() >= MAINTENANCE_RATIO) return;
+  addLog(`⚠️ 保证金率跌破 ${(MAINTENANCE_RATIO*100).toFixed(0)}%，触发强制平仓！`, true);
+  cancelAllOrders(true);
+  state.stocks.forEach(s => {
+    if (s.shares > 0) {
+      const income = s.shares*s.price, net = income - sellFee(income);
+      addLog(`强平 ${s.name} ${s.shares}股 @ ${fmt(s.price)}`, true);
+      state.cash += net; s.shares = 0; s.costTotal = 0; s.frozenToday = 0;
+    }
+  });
+  const repay = Math.min(state.cash, state.debt); state.cash -= repay; state.debt -= repay;
+  if (state.debt > 0.001) { addLog(`⚠️ 亏空 ${fmt(state.debt)}，账户权益归零，游戏结束`, true); state.cash = 0; state.debt = 0; }
+  else addLog(`强平完成，剩余现金 ${fmt(state.cash)}`, true);
+  pause();
+}
+
+// ---------- 时间推进 ----------
+function tick() {
+  if (state.minute >= CLOSE_MIN) { pause(); return; }
+  state.minute += STEP_MIN;
+  maybeTriggerEvent();
+  stepPrices();
+  processOrders();
+  checkLiquidation();
+  if (state.minute >= CLOSE_MIN) { state.minute = CLOSE_MIN; cancelAllOrders(); addLog('—— 收盘 ——'); pause(); }
+  render();
+}
+function play() {
+  if (state.minute >= CLOSE_MIN) { nextDay(); return; }
+  state.running = true;
+  timer = setInterval(tick, parseInt(document.getElementById('speed').value,10));
+  updatePlayBtn();
+}
+function pause() { state.running = false; if (timer) { clearInterval(timer); timer = null; } updatePlayBtn(); }
+function nextDay() {
+  state.day++; state.minute = OPEN_MIN;
+  if (state.debt > 0) {
+    const interest = round2(state.debt * DAILY_INTEREST_RATE);
+    if (interest > 0) {
+      if (state.cash >= interest) state.cash -= interest;
+      else { state.debt += (interest - state.cash); state.cash = 0; }
+      addLog(`融资利息 -${fmt(interest)}（负债 ${fmt(state.debt)}，日息 ${(DAILY_INTEREST_RATE*100).toFixed(3)}%）`);
+    }
+  }
+  state.orders = []; state.frozenCash = 0;
+  state.stocks.forEach(s => { s.prevClose = s.price; s.history = [s.price]; s.newsDir = 0; s.newsHold = 0; s.frozenToday = 0; });
+  state.news = null;
+  addLog(`===== 第${state.day}天开盘 =====`);
+  syncOrderPrice();
+  render();
+}
+function updatePlayBtn() {
+  const btn = document.getElementById('playBtn');
+  if (state.minute >= CLOSE_MIN) { btn.textContent = '下一天 ⏭'; return; }
+  btn.textContent = state.running ? '暂停 ⏸' : '开盘 ▶';
+}
+
+// ---------- 工具 ----------
+const fmt = n => (isFinite(n)?n:0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtTime = m => `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`;
+function pnlClass(n){ return n > 0.001 ? 'up' : (n < -0.001 ? 'down' : 'flat'); }
+function addLog(text, danger=false, kind=''){
+  state.logs.unshift({ text: `[第${state.day}天 ${fmtTime(state.minute)}] ${text}`, danger, kind });
+  if (state.logs.length > 120) state.logs.pop();
+}
+
+// ---------- 市价交易 ----------
+function buy(code) {
+  if (!isOpen()) { alert('已收盘，无法交易'); return; }
+  const s = state.stocks.find(x => x.code===code);
+  if (atUpper(s)) { alert('涨停封板，无法买入'); return; }
+  const lots = parseInt(document.getElementById('qty-'+code).value,10);
+  if (!lots || lots <= 0) { alert('请输入有效手数'); return; }
+  const shares = lots*LOT, cost = shares*s.price, margin = cost/leverage, borrow = cost-margin, fee = buyFee(cost), need = margin+fee;
+  if (need > state.cash) { alert(`可用现金不足。需 ${fmt(need)}（含手续费 ${fmt(fee)}），当前现金 ${fmt(state.cash)}`); return; }
+  state.cash -= need; state.debt += borrow; s.shares += shares; s.frozenToday += shares; s.costTotal += cost;
+  const levTxt = leverage>1 ? `（${leverage}x杠杆，借款${fmt(borrow)}）` : '';
+  addLog(`买入 ${s.name} ${shares}股 @ ${fmt(s.price)}，保证金 ${fmt(margin)}${levTxt}，手续费 ${fmt(fee)}`);
+  render();
+}
+function sell(code) {
+  if (!isOpen()) { alert('已收盘，无法交易'); return; }
+  const s = state.stocks.find(x => x.code===code);
+  if (atLower(s)) { alert('跌停封板，无法卖出'); return; }
+  const lots = parseInt(document.getElementById('qty-'+code).value,10);
+  if (!lots || lots <= 0) { alert('请输入有效手数'); return; }
+  const shares = lots*LOT, avail = sellableShares(s);
+  if (shares > avail) { alert(`可卖不足。持股 ${s.shares}，当日买入 ${s.frozenToday} 股(T+1不可卖)，挂单冻结 ${reservedSell(code)} 股，可卖 ${avail}`); return; }
+  const income = shares*s.price, fee = sellFee(income), net = income-fee, avgCost = s.costTotal/s.shares;
+  s.costTotal -= avgCost*shares; s.shares -= shares;
+  const repay = Math.min(net, state.debt); state.debt -= repay; state.cash += net-repay;
+  addLog(`卖出 ${s.name} ${shares}股 @ ${fmt(s.price)}，费税 ${fmt(fee)}${repay>0?`，还款 ${fmt(repay)}`:''}`);
+  render();
+}
+function selectStock(code){ selectedCode = code; document.getElementById('orderStock').value = code; syncOrderPrice(); render(); }
+
+// ---------- 委托下单 ----------
+function placeOrder() {
+  if (!isOpen()) { alert('已收盘，无法挂单'); return; }
+  const code = document.getElementById('orderStock').value;
+  const s = state.stocks.find(x => x.code===code);
+  const price = round2(parseFloat(document.getElementById('orderPrice').value));
+  const lots = parseInt(document.getElementById('orderLots').value,10);
+  if (!price || price <= 0) { alert('请输入有效委托价'); return; }
+  if (!lots || lots <= 0) { alert('请输入有效手数'); return; }
+  const hi = upperLimit(s), lo = lowerLimit(s);
+  if (price > hi+1e-9 || price < lo-1e-9) { alert(`委托价须在跌停 ${fmt(lo)} ~ 涨停 ${fmt(hi)} 之间`); return; }
+  const shares = lots*LOT;
+  if (orderSide === 'buy') {
+    const cost = shares*price, margin = cost/leverage, borrow = cost-margin, fee = buyFee(cost), reserved = margin+fee;
+    if (reserved > state.cash) { alert(`可用现金不足，挂单需冻结 ${fmt(reserved)}`); return; }
+    state.cash -= reserved; state.frozenCash += reserved;
+    state.orders.push({ id: orderSeq++, code, side:'buy', price, lots, leverage, margin, borrow, fee, reserved });
+    addLog(`挂单·买入 ${s.name} ${lots}手 @ ${fmt(price)}，冻结 ${fmt(reserved)}`);
+  } else {
+    if (shares > sellableShares(s)) { alert(`可卖不足。可卖 ${sellableShares(s)} 股（当日买入 ${s.frozenToday} 股 T+1 不可卖）`); return; }
+    state.orders.push({ id: orderSeq++, code, side:'sell', price, lots, shares });
+    addLog(`挂单·卖出 ${s.name} ${lots}手 @ ${fmt(price)}`);
+  }
+  render();
+}
+function cancelOrder(id) {
+  const o = state.orders.find(x => x.id===id); if (!o) return;
+  if (o.side === 'buy') { state.cash += o.reserved; state.frozenCash -= o.reserved; if (state.frozenCash<0.001) state.frozenCash=0; }
+  state.orders = state.orders.filter(x => x.id!==id);
+  const s = state.stocks.find(x => x.code===o.code);
+  addLog(`撤单·${o.side==='buy'?'买入':'卖出'} ${s.name} ${o.lots}手 @ ${fmt(o.price)}`);
+  render();
+}
+function syncOrderPrice() {
+  const code = document.getElementById('orderStock').value;
+  const s = state.stocks.find(x => x.code===code); if (!s) return;
+  document.getElementById('orderPrice').value = s.price.toFixed(2);
+  document.getElementById('orderHint').textContent = `现价 ${fmt(s.price)} · 委托区间 ${fmt(lowerLimit(s))} ~ ${fmt(upperLimit(s))}`;
+}
+
+// ---------- 走势图 ----------
+function drawChart() {
+  const canvas = document.getElementById('chart');
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w*dpr; canvas.height = h*dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr,dpr); ctx.clearRect(0,0,w,h);
+
+  const s = state.stocks.find(x => x.code===selectedCode);
+  const hi = upperLimit(s), lo = lowerLimit(s);
+  document.getElementById('chartTitle').textContent = `${s.name} (${s.code}) 走势图`;
+  const priceEl = document.getElementById('chartPrice');
+  priceEl.textContent = fmt(s.price);
+  priceEl.className = 'chart-price ' + pnlClass(s.price - s.prevClose);
+  document.getElementById('chartLimits').textContent = `昨收 ${fmt(s.prevClose)} · 涨停 ${fmt(hi)} · 跌停 ${fmt(lo)}`;
+
+  const data = s.history, pad = { l:55, r:15, t:15, b:25 };
+  const cw = w-pad.l-pad.r, ch = h-pad.t-pad.b;
+  let min = lo, max = hi; const padV = (max-min)*0.05; min -= padV; max += padV;
+  const xAt = i => pad.l + (data.length<=1 ? 0 : cw*i/(data.length-1));
+  const yAt = p => pad.t + ch*(1-(p-min)/(max-min));
+
+  ctx.strokeStyle='#232c3d'; ctx.fillStyle='#6b7488'; ctx.font='11px sans-serif'; ctx.textAlign='right';
+  for (let i=0;i<=4;i++){ const val=min+(max-min)*i/4, y=yAt(val); ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke(); ctx.fillText(fmt(val),pad.l-6,y+4); }
+  const drawHLine=(price,color,dash)=>{ const y=yAt(price); ctx.strokeStyle=color; ctx.setLineDash(dash); ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(w-pad.r,y); ctx.stroke(); ctx.setLineDash([]); };
+  drawHLine(hi,'#ff5c5c66',[3,3]); drawHLine(lo,'#33cc8866',[3,3]); drawHLine(s.prevClose,'#4a7dff',[4,4]);
+
+  const lineColor = s.price>=s.prevClose ? '#ff5c5c' : '#33cc88';
+  ctx.strokeStyle=lineColor; ctx.lineWidth=2; ctx.beginPath();
+  data.forEach((p,i)=>{ const x=xAt(i),y=yAt(p); i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); }); ctx.stroke();
+  const grad = ctx.createLinearGradient(0,pad.t,0,pad.t+ch);
+  grad.addColorStop(0,lineColor+'44'); grad.addColorStop(1,lineColor+'00');
+  ctx.lineTo(xAt(data.length-1),pad.t+ch); ctx.lineTo(xAt(0),pad.t+ch); ctx.closePath(); ctx.fillStyle=grad; ctx.fill();
+
+  ctx.fillStyle='#6b7488'; ctx.textAlign='center';
+  ctx.fillText('09:00',pad.l,h-8); ctx.fillText(fmtTime(state.minute),pad.l+cw,h-8);
+}
+
+// ---------- 渲染 ----------
+function renderOrders() {
+  const body = document.getElementById('ordersBody'); body.innerHTML = '';
+  if (!state.orders.length) { document.getElementById('ordersEmpty').style.display='block'; return; }
+  document.getElementById('ordersEmpty').style.display='none';
+  state.orders.forEach(o => {
+    const s = state.stocks.find(x => x.code===o.code);
+    const sideTxt = o.side==='buy' ? '<span class="up">买入</span>' : '<span class="down">卖出</span>';
+    const tr = document.createElement('tr'); tr.className='market-row';
+    tr.innerHTML = `<td>${s.name}</td><td>${sideTxt}</td><td>${fmt(o.price)}</td><td>${o.lots}手</td>
+      <td><button class="btn-ghost" onclick="cancelOrder(${o.id})">撤单</button></td>`;
+    body.appendChild(tr);
+  });
+}
+
+function render() {
+  const open = isOpen();
+  const clock = document.getElementById('clock');
+  clock.textContent = fmtTime(state.minute);
+  clock.className = 'clock ' + (open ? 'open' : 'closed');
+
+  const newsBar = document.getElementById('newsBar'), newsText = document.getElementById('newsText');
+  if (state.news) { newsBar.className='news-bar '+state.news.type; newsText.className='news-text'; newsText.textContent=state.news.text; }
+  else { newsBar.className='news-bar'; newsText.className='news-text dim'; newsText.textContent='暂无突发消息，留意盘中快讯'; }
+
+  const marketBody = document.getElementById('marketBody'); marketBody.innerHTML='';
+  state.stocks.forEach(s => {
+    const change = s.price - s.prevClose, pct = s.prevClose ? change/s.prevClose*100 : 0;
+    const cls = pnlClass(change), arrow = change>0?'▲':(change<0?'▼':'—');
+    let tag = '';
+    if (atUpper(s)) tag = '<span class="tag tag-up">涨停</span>';
+    else if (atLower(s)) tag = '<span class="tag tag-down">跌停</span>';
+    if (s.newsHold > 0) tag += '<span class="tag tag-news">异动</span>';
+    const tr = document.createElement('tr');
+    tr.className = 'market-row' + (s.code===selectedCode ? ' selected' : '');
+    tr.innerHTML = `
+      <td>${s.name}${tag}<br><span style="color:#6b7488;font-size:12px">${s.code}</span></td>
+      <td class="${cls}">${fmt(s.price)}</td>
+      <td class="${cls}">${arrow} ${pct.toFixed(2)}%</td>
+      <td><input type="number" id="qty-${s.code}" value="1" min="1" onclick="event.stopPropagation()"> 手</td>
+      <td>
+        <button class="btn-buy" ${open?'':'disabled'} onclick="event.stopPropagation();buy('${s.code}')">买</button>
+        <button class="btn-sell" ${open?'':'disabled'} onclick="event.stopPropagation();sell('${s.code}')">卖</button>
+      </td>`;
+    tr.addEventListener('click', () => selectStock(s.code));
+    marketBody.appendChild(tr);
+  });
+
+  const holdingBody = document.getElementById('holdingBody'); holdingBody.innerHTML=''; let hasHolding=false;
+  state.stocks.forEach(s => {
+    if (s.shares <= 0) return; hasHolding = true;
+    const avgCost = s.costTotal/s.shares, marketVal = s.shares*s.price;
+    const pnl = marketVal - s.costTotal, pnlPct = pnl/s.costTotal*100, cls = pnlClass(pnl);
+    const sellable = sellableShares(s);
+    const tr = document.createElement('tr'); tr.className='market-row';
+    tr.innerHTML = `
+      <td>${s.name}</td><td>${s.shares}</td>
+      <td class="${sellable<s.shares?'flat':''}">${sellable}</td>
+      <td>${fmt(avgCost)}</td><td>${fmt(s.price)}</td>
+      <td class="${cls}">${fmt(pnl)}<br><span style="font-size:12px">(${pnlPct.toFixed(2)}%)</span></td>`;
+    holdingBody.appendChild(tr);
+  });
+  document.getElementById('holdingEmpty').style.display = hasHolding ? 'none' : 'block';
+
+  const hv = holdingValue(), eq = equity(), totalPnl = eq - INITIAL_CASH;
+  document.getElementById('cash').textContent = fmt(state.cash);
+  document.getElementById('frozenCash').textContent = fmt(state.frozenCash);
+  document.getElementById('holdingValue').textContent = fmt(hv);
+  const debtEl = document.getElementById('debt'); debtEl.textContent = fmt(state.debt); debtEl.className = 'value ' + (state.debt>0?'up':'flat');
+  document.getElementById('equity').textContent = fmt(eq);
+  const pnlEl = document.getElementById('totalPnl'); pnlEl.textContent = fmt(totalPnl)+` (${(totalPnl/INITIAL_CASH*100).toFixed(2)}%)`; pnlEl.className = 'value '+pnlClass(totalPnl);
+  document.getElementById('day').textContent = state.day;
+
+  const mrEl = document.getElementById('marginRatio'), mr = marginRatio();
+  if (!isFinite(mr)) { mrEl.textContent='—'; mrEl.className='value flat'; }
+  else { mrEl.textContent = (mr*100).toFixed(1)+'%'; mrEl.className = 'value ' + (mr>=0.4?'risk-ok':mr>=MAINTENANCE_RATIO?'risk-mid':'risk-bad'); }
+
+  const log = document.getElementById('log');
+  log.innerHTML = state.logs.length ? state.logs.map(l => `<div class="${l.danger?'danger':l.kind}">${l.text}</div>`).join('') : '<div class="empty">还没有交易记录</div>';
+
+  renderOrders();
+  updatePlayBtn();
+  drawChart();
+}
+
+// ---------- 事件 ----------
+document.getElementById('playBtn').addEventListener('click', () => { state.running ? pause() : play(); });
+document.getElementById('speed').addEventListener('change', () => { if (state.running) { pause(); play(); } });
+document.getElementById('reset').addEventListener('click', () => { if (confirm('确定重置游戏？')) { pause(); initState(); fillOrderStockOptions(); syncOrderPrice(); render(); } });
+document.querySelectorAll('.lev-opt').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.lev-opt').forEach(x => x.classList.remove('active'));
+    el.classList.add('active'); leverage = parseInt(el.dataset.lev,10);
+    document.getElementById('levWarn').textContent = leverage>1 ? `当前 ${leverage}x：保证金率低于 ${(MAINTENANCE_RATIO*100).toFixed(0)}% 将被强制平仓` : '';
+  });
+});
+document.getElementById('sideBuy').addEventListener('click', () => { orderSide='buy'; document.getElementById('sideBuy').classList.add('active'); document.getElementById('sideSell').classList.remove('active'); });
+document.getElementById('sideSell').addEventListener('click', () => { orderSide='sell'; document.getElementById('sideSell').classList.add('active'); document.getElementById('sideBuy').classList.remove('active'); });
+document.getElementById('orderStock').addEventListener('change', syncOrderPrice);
+document.getElementById('placeOrder').addEventListener('click', placeOrder);
+window.addEventListener('resize', drawChart);
+
+function fillOrderStockOptions() {
+  document.getElementById('orderStock').innerHTML = state.stocks.map(s => `<option value="${s.code}">${s.name} (${s.code})</option>`).join('');
+}
+
+// ---------- 启动 ----------
+initState();
+fillOrderStockOptions();
+syncOrderPrice();
+render();
+</script>
+</body>
+</html>
